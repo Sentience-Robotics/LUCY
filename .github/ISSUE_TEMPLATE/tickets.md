@@ -1,8 +1,8 @@
 ---
 name: Tickets
 about: Create a ticket to improve / fix the project
-title: "[TICKETS]"
-labels: ''
+title: ''
+labels: Ticket
 assignees: ''
 
 ---
