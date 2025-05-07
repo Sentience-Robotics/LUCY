@@ -1,0 +1,49 @@
+#!/bin/bash
+
+DEST_FOLDER="."
+
+# Creating the .envrc
+
+eval "$(cat .envrc.example > .envrc)"
+
+# Cloning repositories
+
+echo -e "Select a cloning method:"
+echo -e "  1- https"
+echo -e "  2- ssh"
+read method
+
+method=$(echo $method | tr '[:upper:]' '[:lower:]')
+
+case "$method" in
+    1|https|http)
+        ENDPOINT="https://github.com/Sentience-Robotics"
+        ;;
+    2|ssh)
+        ENDPOINT="git@github.com:Sentience-Robotics"
+        ;;
+    *)
+        echo -e "\033[31mThis method does not exists.\033[0m"
+        exit 1
+esac
+
+IFS=";"
+REPOS="LUCY"
+
+umask 000
+for repo in $REPOS; do
+    echo -e "\033[32mCloning $ENDPOINT/$repo.git.\033[0m"
+    git clone "$ENDPOINT/$repo.git"
+    echo -e "\033[32mSetting up $repo permissions.\033[0m"
+    chmod -R +rw $repo
+done
+
+# Pulling docker image
+
+DOCKER=`which docker 2> /dev/null`
+if [[ $? -ne 0 ]]; then
+    echo -e "\033[31mDocker not found. Having an docker environment for development is strongly recommended.\033[0m"
+fi
+$DOCKER pull ghcr.io/sentience-robotics/ros2_base:jazzy
+
+exit 0
