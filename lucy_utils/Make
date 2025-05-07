@@ -1,0 +1,203 @@
+#!/bin/bash
+
+display_header() {
+    echo -e "\033[32m**************************************************\033[0m"
+    echo -e "\033[32m*                                                *\033[0m"
+    echo -e "\033[32m*  Building the project with CMake               *\033[0m"
+    echo -e "\033[32m*                                                *\033[0m"
+    echo -e "\033[32m*  Maintainer: m-brl                             *\033[0m"
+    echo -e "\033[32m*  Date: $(date +%Y-%m-%d)                              *\033[0m"
+    echo -e "\033[32m*                                                *\033[0m"
+    echo -e "\033[32m*  Version: $VERSION                                  *\033[0m"
+    echo -e "\033[32m*                                                *\033[0m"
+    echo -e "\033[32m**************************************************\033[0m\n"
+}
+
+display_help() {
+    echo "Usage: $0 [options]"
+    echo
+    echo "Options:"
+    echo "  -h, --help      Show this help message"
+    echo "  -b, --build     Build the project"
+    echo "  -r, --rebuild   Rebuild the project"
+    echo "  -c, --clean     Clean the build directory"
+    echo "  -j, --jobs      Number of jobs to run simultaneously"
+    echo "  -p, --preset    Specify the preset to use"
+    echo "  --build-dir     Specify the build directory"
+    echo "  --now           Skip the delay before cleaning"
+}
+
+clean_build() {
+    if [[ ! -d "$BUILD_DIR" ]]; then
+        echo "Build directory $BUILD_DIR does not exist. Nothing to clean."
+        return
+    fi
+    stopwatch=$DELAY_BEFORE_PURGE
+    while [[ $stopwatch -gt 0 ]]; do
+        echo -e "Cleaning the build directory in $stopwatch seconds..."
+        sleep 1
+        ((stopwatch--))
+    done
+    echo "Cleaning the build directory..."
+    rm -rf "$BUILD_DIR"
+}
+
+build() {
+    if [[ ! -f "CMakeLists.txt" ]]; then
+        echo "CMakeLists.txt not found. Please run this script from the project root directory."
+        exit 1
+    fi
+    if [[ -z "$PRESET_FLAG" ]]; then
+        echo -e "\033[33mNo preset defined\033[0m"
+    fi
+    if [[ ! -d "$BUILD_DIR" ]]; then
+        echo -e "\033[32mBuild directory $BUILD_DIR does not exist. Creating it...\033[0m"
+        mkdir -p $BUILD_DIR
+    fi
+    {
+        cd $BUILD_DIR
+        $CMAKE $PRESET_FLAG ..
+        if [[ "$?" -ne 0 ]]; then
+            echo -e "\033[31mCMake configuration failed.\033[0m"
+            exit 1
+        else
+            echo -e "\033[32mCMake configuration succeeded.\033[0m"
+        fi
+        $CMAKE --build . -- -j $JOBS
+        if [[ "$?" -ne 0 ]]; then
+            echo -e "\033[31mBuild failed.\033[0m"
+            exit 1
+        else
+            echo -e "\033[32mBuild succeeded.\033[0m"
+        fi
+    }
+}
+
+generate_ctags() {
+    CTAGS=`which ctags 2> /dev/null`
+    if [[ $? -ne 0 ]]; then
+        echo -e "\033[31mctags not found. Please install ctags.\033[0m"
+        exit 1
+    fi
+    $CTAGS -R --exclude=external --exclude=build
+}
+
+
+
+
+
+CMAKE=`which cmake 2> /dev/null`
+if [[ $? -ne 0 ]]; then
+    echo -e "\033[31mCMake not found. Please install CMake.\033[0m"
+    exit 1
+fi
+
+OPTIONS=":hbrcj:p:"
+LONGOPTS="help,build,rebuild,clean,jobs:,preset:,build-dir:,now"
+OPTS=$(getopt --name "$0" -o $OPTIONS -l $LONGOPTS -- "$@")
+if [ $? -ne 0 ]; then
+    display_help
+    exit 1
+fi
+
+VERSION="1.0"
+
+TARGET="none"
+JOBS=1
+
+DELAY_BEFORE_PURGE=3
+
+PRESET_FLAG=""
+BUILD_DIR="build"
+
+UPLOAD=false
+
+
+
+
+
+display_header
+
+eval set -- "$OPTS"
+
+while true; do
+    case "$1" in
+        -h|--help)
+            display_help
+            shift 1
+            exit 0
+            ;;
+        -b|--build)
+            if [[ "$TARGET" != "none" ]]; then
+                echo "Multiple targets specified. Please choose only one."
+                exit 1
+            fi
+            TARGET="build"
+            shift 1
+            ;;
+        -r|--rebuild)
+            if [[ "$TARGET" != "none" ]]; then
+                echo "Multiple targets specified. Please choose only one."
+                exit 1
+            fi
+            TARGET="rebuild"
+            shift 1
+            ;;
+        -c|--clean)
+            if [[ "$TARGET" != "none" ]]; then
+                echo "Multiple targets specified. Please choose only one."
+                exit 1
+            fi
+            TARGET="clean"
+            shift 1
+            ;;
+        -j|--jobs)
+            if [[ -z "$2" ]]; then
+                echo $2
+                JOBS=$(nproc --all)
+                shift 1
+            fi
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                JOBS="$2"
+                shift 2
+            else
+                echo "Invalid number of jobs: $2"
+                exit 1
+            fi
+            ;;
+        -p|--preset)
+            PRESET_FLAG="--preset=$2"
+            shift 2
+            ;;
+        --build-dir)
+            BUILD_DIR="$2"
+            shift 2
+            ;;
+        --now)
+            DELAY_BEFORE_PURGE=0
+            shift 1
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Invalid option: $1"
+            display_help
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "$TARGET" == "none" ]]; then
+    echo -e "No target specified. Use -b, -r, or -c."
+    exit 1
+fi
+
+if [[ "$TARGET" == "clean" || "$TARGET" == "rebuild" ]]; then
+    clean_build
+fi
+
+if [[ "$TARGET" == "build" || "$TARGET" == "rebuild" ]]; then
+    build
+fi
