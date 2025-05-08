@@ -2,10 +2,6 @@
 
 DEST_FOLDER="."
 
-# Creating the .envrc
-
-eval "$(cat .envrc.example > .envrc)"
-
 # Cloning repositories
 
 echo -e "Select a cloning method:"
@@ -31,18 +27,28 @@ IFS=";"
 REPOS="LUCY"
 
 umask 000
+GIT=`which git 2> /dev/null`
+CHMOD=`which chmod 2> /dev/null`
 for repo in $REPOS; do
-    echo -e "\033[32mCloning $ENDPOINT/$repo.git.\033[0m"
-    git clone "$ENDPOINT/$repo.git"
-    echo -e "\033[32mSetting up $repo permissions.\033[0m"
-    chmod -R +rw $repo
+    echo -ne "Cloning $ENDPOINT/$repo.git."
+    $GIT clone "$ENDPOINT/$repo.git" 2> /dev/null
+    echo -e "\033[32m ok.\033[0m"
+    echo -ne "Setting up $repo permissions."
+    $CHMOD -R +rw $repo
+    echo -e "\033[32m ok.\033[0m"
 done
+
+## Setting up the environment
+
+echo -e "\033[32mSetting up the environment.\033[0m"
+echo 'export PATH="$PATH:$(pwd)/lucy_utils"' >> LUCY/.envrc
 
 # Pulling docker image
 
 DOCKER=`which docker 2> /dev/null`
 if [[ $? -ne 0 ]]; then
     echo -e "\033[31mDocker not found. Having an docker environment for development is strongly recommended.\033[0m"
+    exit 0
 fi
 $DOCKER pull ghcr.io/sentience-robotics/ros2_base:jazzy
 
