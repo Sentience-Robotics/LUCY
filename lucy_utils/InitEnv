@@ -1,0 +1,134 @@
+#!/bin/bash
+
+display_header() {
+    printf "\033[32m"
+    printf "**************************************************\n"
+    printf "*                                                *\n"
+    printf "*  Setup LUCY environment                        *\n"
+    printf "*                                                *\n"
+    printf "*  Maintainer: m-brl                             *\n"
+    printf "*  Version: %-36s *\n" $VERSION
+    printf "*                                                *\n"
+    printf "**************************************************\n"
+    printf "\033[0m"
+}
+
+
+
+# Creating folder
+
+echo -ne "Creating lucy folder "
+if [[ -d "lucy" ]]; then
+    echo -e "\033[31mko.\033[0m"
+    echo -e "The folder lucy already exists."
+    exit 1
+fi
+mkdir lucy
+cd lucy
+echo -e "\033[32mok.\033[0m"
+
+# Cloning repositories
+
+echo -e "Select a cloning method:"
+echo -e "  1- https"
+echo -e "  2- ssh"
+read method
+method=$(echo $method | tr '[:upper:]' '[:lower:]')
+
+case "$method" in
+    1|https|http)
+        ENDPOINT="https://github.com/Sentience-Robotics"
+        ;;
+    2|ssh)
+        ENDPOINT="git@github.com:Sentience-Robotics"
+        ;;
+    *)
+        echo -e "\033[31mThis method does not exists.\033[0m"
+        exit 1
+esac
+
+GIT=$(command -v git 2> /dev/null)
+if [[ $? -ne 0 ]]; then
+    echo -e "\033[31mgit not found.\033[0m"
+    exit 1
+fi
+
+CHMOD=$(command -v chmod 2> /dev/null)
+if [[ $? -ne 0 ]]; then
+    echo -e "\033[31mchmod not found.\033[0m"
+    exit 1
+fi
+IFS=";"
+REPOS="lucy_ros2;lucy_micro_ros_pico"
+
+umask 000
+for repo in $REPOS; do
+    echo -ne "Cloning $ENDPOINT/$repo.git "
+    $GIT clone "$ENDPOINT/$repo.git" 2> /tmp/lucy_init.log
+    if [[ $? -ne 0 ]]; then
+        echo -e "\033[31mko.\033[0m"
+        cat /tmp/lucy_init.log
+        exit 1
+    else
+        echo -e "\033[32mok.\033[0m"
+    fi
+
+    echo -ne "Setting up $repo permissions "
+    $CHMOD -R +rw $repo 2> /tmp/lucy_init.log
+    if [[ $? -ne 0 ]]; then
+        echo -e "\033[31mko.\033[0m"
+        cat /tmp/lucy_init.log
+        exit 1
+    else
+        echo -e "\033[32mok.\033[0m"
+    fi
+done
+
+# Setting up symlink
+
+ln -s "./lucy_ros2/lucy_docker" lucy_docker
+ln -s "./lucy_ros2/lucy_utils" lucy_utils
+ln -s "./lucy_ros2/lucy_docker/ros2_ws/docker-compose.yml" docker-compose.yml
+
+# Setting up the environment
+
+envrc='
+export VERSION="0.1.0-dev"
+export ros_distro="jazzy"
+export lucy="$(pwd)"
+export lucy_micro_ros_pico="$lucy/lucy_micro_ros_pico"
+export lucy_ros2="$lucy/lucy_ros2"
+export lucy_utils="$lucy_ros2/lucy_utils"
+export lucy_docker="$lucy_ros2/lucy_docker"
+export PATH="$PATH:$lucy_utils"
+'
+echo $envrc > .envrc
+
+echo -ne "Setting up the environment "
+DIRENV=$(command -v direnv 2> /dev/null)
+if [[  $? -ne 0 ]]; then
+    echo -e "\033[31mko.\033[0m"
+    echo -e "direnv not found."
+    exit 1
+fi
+$DIRENV allow .
+echo -e "\033[32mko.\033[0m"
+
+# Pulling docker image
+
+echo -ne "Pulling docker image "
+DOCKER=$(command -v docker 2> /dev/null)
+if [[ $? -ne 0 ]]; then
+    echo -e "\033[31mDocker not found. Having an docker environment for development is strongly recommended.\033[0m"
+    exit 0
+fi
+$DOCKER pull ghcr.io/sentience-robotics/ros2_ws:jazzy > /dev/null 2> /tmp/lucy_init.log
+if [[ $? -ne 0 ]]; then
+    echo -e "\033[31mko.\033[0m"
+    cat /tmp/lucy_init.log
+    exit 1
+else
+    echo -e "\033[32mok.\033[0m"
+fi
+
+exit 0
