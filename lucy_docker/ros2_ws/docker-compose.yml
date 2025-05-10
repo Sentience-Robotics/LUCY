@@ -1,0 +1,8 @@
+services:
+  ros2_ws:
+    image: ghcr.io/sentience-robotics/ros2_ws:jazzy
+    restart: unless-stopped
+    command: tail -f /dev/null
+    volumes:
+      - ".:/home/rosdev/ros2_ws/"
+    network_mode: host

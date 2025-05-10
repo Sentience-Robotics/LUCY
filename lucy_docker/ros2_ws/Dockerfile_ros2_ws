@@ -1,0 +1,55 @@
+FROM ubuntu:noble
+
+LABEL org.opencontainers.image.title="ros2_ws"
+LABEL org.opencontainers.image.description="ROS2 workspace"
+LABEL org.opencontainers.image.vendor="Sentience Robotics"
+LABEL org.opencontainers.image.authors="Sentience Robotics"
+
+#Setup ARG
+ARG DEBIAN_FRONTEND=noninteractive
+ARG ROS_DISTRO=jazzy
+
+ARG USERNAME=rosdev
+
+# Set the locale
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# Install mandatory packages packages
+RUN apt update -q && \
+    apt upgrade -q -y && \
+    apt install -y --no-install-recommends \
+        software-properties-common \
+        python3-pip \
+        git vim screen curl lsb-release gnupg sudo clang clangd \
+        libboost-all-dev \
+        xorg dbus-x11 tigervnc-common tigervnc-xorg-extension tigervnc-standalone-server tigervnc-tools && \
+    add-apt-repository universe && \
+    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null && \
+    apt update -q && \
+    apt install -y --no-install-recommends \
+        ros-$ROS_DISTRO-desktop \
+        ros-$ROS_DISTRO-ros-gz \
+        ros-dev-tools \
+        ros-$ROS_DISTRO-joint-state-publisher \
+        ros-$ROS_DISTRO-joint-state-publisher-gui && \
+    apt clean -y && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+
+# Setup Entrypoint
+COPY --chown=$USERNAME:$USERNAME entrypoint.sh /entrypoint.sh
+
+# Setup user
+RUN useradd -m -s /bin/bash -G sudo $USERNAME && \
+    echo "$USERNAME ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    mkdir -p /home/$USERNAME/ros2_ws/src && \
+    chown -R $USERNAME:$USERNAME /home/$USERNAME/ros2_ws
+USER $USERNAME
+RUN bash -c "echo -e 'rosdev\nrosdev\n' | vncpasswd"
+
+WORKDIR /home/$USERNAME/ros2_ws
+
+# Copy configuration files
+RUN echo 'source /opt/ros/'$ROS_DISTRO'/setup.bash' >> /home/$USERNAME/.bashrc && \
+    echo 'source /home/'$USERNAME'/ros2_ws/install/local_setup.bash' >> /home/$USERNAME/.bashrc
